@@ -1,0 +1,230 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Network stack for regional deployment
+
+Parameters:
+  ProjectId:
+    Type: String
+    Description: Project ID used to name project resources and create roles
+  VpcCidr: 
+    Type: String
+    Description: CIDR for VPC deployments
+
+Outputs:
+  VpcID:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: stack-network-VpcID
+  VpcCidr:
+    Description: VPC CIDR
+    Value: !GetAtt VPC.CidrBlock
+    Export:
+      Name: stack-network-VpcCidr
+  PrivateRouteTableID:
+    Description: Private Routing Table ID
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: stack-network-PrivateRouteTableId
+  PublicSubnet1A:
+    Description: Public Subnet 1A
+    Value: !Ref PublicSubnet1A
+    Export:
+      Name: stack-network-PublicSubnet1A
+  PublicSubnet1B:
+    Description: Public Subnet 1B
+    Value: !Ref PublicSubnet1B
+    Export:
+      Name: stack-network-PublicSubnet1B
+  PublicSubnet1C:
+    Description: Public Subnet 1C
+    Value: !Ref PublicSubnet1C
+    Export:
+      Name: stack-network-PublicSubnet1C
+  PrivateSubnet2A:
+    Description: Private Subnet 2A
+    Value: !Ref PrivateSubnet2A
+    Export:
+      Name: stack-network-PrivateSubnet2A
+  PrivateSubnet2B:
+    Description: Private Subnet 2B
+    Value: !Ref PrivateSubnet2B
+    Export:
+      Name: stack-network-PrivateSubnet2B
+  PrivateSubnet2C:
+    Description: Private Subnet 2C
+    Value: !Ref PrivateSubnet2C
+    Export:
+      Name: stack-network-PrivateSubnet2C
+
+Resources:
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectId}-vpc'
+
+  PublicSubnet1A:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      CidrBlock: !Select [ 4, !Cidr [ !GetAtt VPC.CidrBlock, 16, 6]]
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectId}-PublicSubnet1A
+
+  PublicSubnet1B:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}b'
+      CidrBlock: !Select [ 5, !Cidr [ !GetAtt VPC.CidrBlock, 16, 6]]
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectId}-PublicSubnet1B
+
+  PublicSubnet1C:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}c'
+      CidrBlock: !Select [ 6, !Cidr [ !GetAtt VPC.CidrBlock, 16, 6]]
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectId}-PublicSubnet1C
+
+
+  PrivateSubnet2A:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      CidrBlock: !Select [ 8, !Cidr [ !GetAtt VPC.CidrBlock, 16, 6]]
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectId}-PrivateSubnet2A
+
+  PrivateSubnet2B:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}b'
+      CidrBlock: !Select [ 9, !Cidr [ !GetAtt VPC.CidrBlock, 16, 6]]
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectId}-PrivateSubnet2B
+
+  PrivateSubnet2C:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}c'
+      CidrBlock: !Select [ 10, !Cidr [ !GetAtt VPC.CidrBlock, 16, 6]]
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectId}-PrivateSubnet2C
+
+  IGW:
+    Type: "AWS::EC2::InternetGateway"
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectId}-IGW'
+
+  IGWAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      InternetGatewayId: !Ref IGW
+      VpcId: !Ref VPC
+
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectId}-PublicRouteTable'
+
+  PublicRouteTableIGWRoute:
+    Type: "AWS::EC2::Route"
+    DependsOn: IGWAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicRouteTablePublicSubnet1A:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1A
+
+  PublicRouteTablePublicSubnet1B:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1B
+
+  PublicRouteTablePublicSubnet1C:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1C
+
+
+  NGWEIP:
+    Type: "AWS::EC2::EIP"
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectId}-NGWEIP
+
+  NGW:
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      AllocationId: !GetAtt NGWEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1A
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectId}-NGW'
+
+  PrivateRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectId}-PrivateRouteTable'
+
+  PrivateRouteTableNGWRoute:
+    Type: "AWS::EC2::Route"
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NGW
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateRouteTablePrivateSubnet2A:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2A
+
+  PrivateRouteTablePrivateSubnet2B:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2B
+
+  PrivateRouteTablePrivateSubnet2C:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2C

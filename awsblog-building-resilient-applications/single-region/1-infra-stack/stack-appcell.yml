@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: App stack for regional deployment
+Conditions:
+  PrimaryRegion: !Equals
+    - !Sub ${AWS::Region}
+    - !Ref Region1
+
+Parameters:
+  ProjectId:
+    Type: String
+    Description: Project ID used to name project resources and create roles
+  ImageId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Description: Latest AMI from Systems Manager Parameter store
+  InstanceType:
+    Type: String
+    Description: EC2 Instance Type for FrontEnd deployment
+  Region1:
+    Type: String
+    Description: Primary deployment Region name (must match first region being used for template deployment)
+  AllowedCidr:
+    Type: String
+    Description: CIDR allowed in security group for FrontEnd access
+  NlbScheme:
+    Type: String
+    Description: Scheme to use for NLB deployment.  Must be either 'internal' or 'internet-facing'.
+  AsgMin:
+    Type: Number
+    Description: Value to set as the minimum number of instances in the ASGs.
+  AsgMax:
+    Type: Number
+    Description: Value to set as the maximum number of instances in the ASGs.
+  CellId:
+    Type: String
+    Description: ID of the Cell currently being deployed.  Typically this will be A, B, or C, aligned to an Availability Zone.
+
+Outputs:
+  FrontEndNlbDnsName:
+    Description: FrontEnd NLB DNS Name
+    Value: !GetAtt FrontEndNlb.DNSName
+    Export:
+      Name: !Sub stack-app${CellId}-FrontEndNlbDnsName
+  FrontEndNlbCanonicalHostedZoneID:
+    Description: FrontEnd NLB Canonical Hosted Zone ID
+    Value: !GetAtt FrontEndNlb.CanonicalHostedZoneID
+    Export:
+      Name: !Sub stack-app${CellId}-FrontEndNlbCanonicalHostedZoneID
+  FrontEndSG:
+    Description: FrontEnd Security Group
+    Value: !Ref FrontEndSG
+    Export:
+      Name: !Sub stack-app${CellId}-FrontEndSG
+
+Resources:
+  FrontEndNlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: 
+      Name: !Sub ${ProjectId}-FrontEndNlb${CellId}
+      IpAddressType: ipv4
+      Scheme: !Ref NlbScheme
+      Subnets: 
+        - Fn::ImportValue: !Sub "stack-network-PublicSubnet1${CellId}"
+      Type: network
+
+  FrontEndNlbTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${ProjectId}-FrontEndNlbTG${CellId}
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '10'
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 10
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: TCP
+      UnhealthyThresholdCount: 2
+      TargetType: instance
+      VpcId: !ImportValue stack-network-VpcID
+
+  FrontEndNlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties: 
+      DefaultActions: 
+        - Type: forward
+          TargetGroupArn: !Ref FrontEndNlbTG
+      LoadBalancerArn: !Ref FrontEndNlb
+      Port: 80
+      Protocol: TCP
+          
+  FrontEndASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub FrontEndASG${CellId}
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub "stack-network-PrivateSubnet2${CellId}"
+      CapacityRebalance: true
+      Cooldown: '30'
+      HealthCheckGracePeriod: 120
+      HealthCheckType: EC2
+      LaunchTemplate: 
+        LaunchTemplateId: !Ref 'FrontEndASGLaunchTemplate'
+        Version: !GetAtt 'FrontEndASGLaunchTemplate.LatestVersionNumber'
+      MaxSize: !Ref AsgMax
+      MinSize: !Ref AsgMin
+      TargetGroupARNs: 
+        - !Ref 'FrontEndNlbTG'
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: true
+          Value: !Sub '${ProjectId}-FrontEndInstance${CellId}'
+
+  FrontEndASGLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub FrontEndASGLaunchTemplate${CellId}
+      LaunchTemplateData: 
+        ImageId: !Ref 'ImageId'
+        InstanceType: !Ref 'InstanceType'
+        SecurityGroupIds: 
+          - !Ref FrontEndSG
+        TagSpecifications: 
+          - ResourceType: instance
+            Tags:
+              - Key: Environment
+                Value: !Sub '${ProjectId}-FrontEnd'
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash -ex
+            sudo yum update -y
+            sudo amazon-linux-extras install nginx1 -y
+            sudo mkdir /usr/share/nginx/html/sh
+            sudo curl http://169.254.169.254/latest/meta-data/placement/availability-zone > /usr/share/nginx/html/sh/index.html 
+            sudo echo "location /sh/ {" > /etc/nginx/default.d/fe.conf
+            sudo echo "  root /usr/share/nginx/html/;" >> /etc/nginx/default.d/fe.conf
+            sudo echo "}" >> /etc/nginx/default.d/fe.conf
+            sudo systemctl enable nginx
+            sudo service nginx start
+
+  FrontEndSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for FrontEnd servers
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowedCidr
+          Description: Permit access inbound from the Allowed CIDR to FrontEnd Security Group on Port 80
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+          Description: Allow outbound access from FrontEnd Instances for patching, updates, logging, etc. WARNING this access should be restricted in a production environment.
+      VpcId: !ImportValue stack-network-VpcID
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectId}-FrontEndSG${CellId}'

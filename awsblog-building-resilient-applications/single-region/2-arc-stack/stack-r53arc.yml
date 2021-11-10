@@ -1,0 +1,434 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  |
+  This CloudFormation Template supports the requirements of an AWS Blog Post on Route 53 Application Recovery Controller.
+  It is the second part of a three part CloudFormation Deployment.  It has dependencies on the preceeding [1] base infrastructure deployment, and is required for [3] supporting Lambda deployment.
+  It should be deployed as a standard Stack in us-east-1, within a single AWS account.
+  It will deploy the following Route 53 Application Recovery Controller components:
+  A) Recovery Readiness Groups, Cells, and Resource Sets
+  B) Routing Control Clusters, Control Panels, Routing Controls, Safety Rules, and Healthchecks
+  C) Route 53 DNS Private Hosted Zone and associated DNS entries
+  This template is provided as a sample for educational purposes and should NOT be considered production ready.
+#  Note that this template is designed in a modular way, and most relevant possible variables are stored in the 'Mappings > StaticParameters' section of the template.
+#  These parameters can be modified by advanced users at their own risk.
+#  Note that the resources deployed using this template will cost approx. $2.50/hr.  Please be sure to clean up all resources by deleting the CloudFormation Stacks when they are no longer required.
+
+Mappings:
+  StaticParameters:
+    StaticParameters:
+      FrontEndURL: app.arcblog.aws # This URL will be created in Route 53 as the sample application address.  It must be within the HostedZoneDomain.
+      FrontEndBackupURL: maintenance.arcblog.aws # This URL will be created in Route 53 as the sample maintenace address.  It must be within the HostedZoneDomain.
+      HostedZoneDomain: arcblog.aws # This Hosted Zone will be created in Route 53.  The domains above must be within it.
+      Region1: us-east-1 # This must match the primary application deployment region.
+
+Parameters:
+  ProjectId:
+    Type: String
+    Description: Please enter a Project ID or Name which will be used for naming objects created by this template.  Must begin with a letter, contain only alphanumeric characters, and be shorter than 10 characters.
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    MaxLength: 10
+    ConstraintDescription: Must begin with a letter, contain only alphanumeric characters, and be shorter than 10 characters.
+    Default: arcblog
+  Region1VpcId:
+    Type: String
+    Description: Region 1 VPC ID
+  Region1ElbDnsNameA:
+    Type: String
+    Description: Region 1 ELB DNS Name for Cell A
+  Region1ElbDnsNameB:
+    Type: String
+    Description: Region 1 ELB DNS Name for Cell B
+  Region1ElbDnsNameC:
+    Type: String
+    Description: Region 1 ELB DNS Name for Cell C
+  Region1ElbCanonicalHostedZoneId:
+    Type: String
+    Description: Region 1 ELB Canonical Hosted Zone ID
+  Region1ElbArnA:
+    Type: String
+    Description: Region 1 ELB ARN for Cell A
+  Region1ElbArnB:
+    Type: String
+    Description: Region 1 ELB ARN for Cell B
+  Region1ElbArnC:
+    Type: String
+    Description: Region 1 ELB ARN for Cell C
+  Region1AsgArnA:
+    Type: String
+    Description: Region 1 ASG ARN for Cell A
+  Region1AsgArnB:
+    Type: String
+    Description: Region 1 ASG ARN for Cell B
+  Region1AsgArnC:
+    Type: String
+    Description: Region 1 ASG ARN for Cell C
+  Region1AuroraClusterArn:
+    Type: String
+    Description: Region 1 Aurora Cluster ARN
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: 
+          default: General Configuration Parameters
+        Parameters:
+          - ProjectId
+      - Label:
+          default: Region 1 Configuration Parameters
+        Parameters:
+          - Region1VpcId
+          - Region1ElbDnsNameA
+          - Region1ElbDnsNameB
+          - Region1ElbDnsNameC
+          - Region1ElbCanonicalHostedZoneId
+          - Region1ElbArnA
+          - Region1ElbArnB
+          - Region1ElbArnC
+          - Region1AsgArnA
+          - Region1AsgArnB
+          - Region1AsgArnC
+          - Region1AuroraClusterArn
+    ParameterLabels:
+      ProjectId:
+        default: Please enter a Project ID or Name which will be used for naming objects created by this template.  If using this template in conjunction with the base blog infrastructure deployment you must use the same Project ID.
+      Region1VpcId:
+        default: Please enter the ID of the VPC in the primary region.
+      Region1ElbDnsNameA:
+        default: Please enter the DNS Name for the NLB in Region 1 Availability Zone A
+      Region1ElbDnsNameB:
+        default: Please enter the DNS Name for the NLB in Region 1 Availability Zone B
+      Region1ElbDnsNameC:
+        default: Please enter the DNS Name for the NLB in Region 1 Availability Zone C
+      Region1ElbCanonicalHostedZoneId:
+        default: Please enter the Canonical Hosted Zone ID for the NLB in Region 1
+      Region1ElbArnA:
+        default: Please enter the ARN for the NLB in Region 1 Availability Zone A
+      Region1ElbArnB:
+        default: Please enter the ARN for the NLB in Region 1 Availability Zone B
+      Region1ElbArnC:
+        default: Please enter the ARN for the NLB in Region 1 Availability Zone C
+      Region1AsgArnA:
+        default: Please enter the ARN for the ASG in Region 1 Availability Zone A
+      Region1AsgArnB:
+        default: Please enter the ARN for the ASG in Region 1 Availability Zone B
+      Region1AsgArnC:
+        default: Please enter the ARN for the ASG in Region 1 Availability Zone C
+      Region1AuroraClusterArn:
+        default: Please enter the ARN for the Aurora Cluster in Region 1
+
+
+#Outputs:
+#  RoutingControlCell1Aurora:
+#    Description: ARN for Cell 1 Aurora Routing Control
+#    Value: !Ref RoutingControlCell1Aurora
+
+Resources:
+  Cell1:
+    Type: AWS::Route53RecoveryReadiness::Cell
+    Properties:
+      CellName: !Sub 
+        - ${ProjectId}-Cell1-${Region1}
+        - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+      Cells: 
+        - !GetAtt Cell1A.CellArn
+        - !GetAtt Cell1B.CellArn
+        - !GetAtt Cell1C.CellArn
+
+  Cell1A:
+    Type: AWS::Route53RecoveryReadiness::Cell
+    Properties:
+      CellName: !Sub 
+        - ${ProjectId}-Cell1A-${Region1}a
+        - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+
+  Cell1B:
+    Type: AWS::Route53RecoveryReadiness::Cell
+    Properties:
+      CellName: !Sub 
+        - ${ProjectId}-Cell1B-${Region1}b
+        - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+
+  Cell1C:
+    Type: AWS::Route53RecoveryReadiness::Cell
+    Properties:
+      CellName: !Sub 
+        - ${ProjectId}-Cell1C-${Region1}c
+        - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+
+  RecoveryGroup:
+    Type: AWS::Route53RecoveryReadiness::RecoveryGroup
+    Properties:
+      RecoveryGroupName: !Sub ${ProjectId}-RecoveryGroup
+      Cells:
+        - !GetAtt Cell1.CellArn
+
+  ResourceSetElb:
+    Type: AWS::Route53RecoveryReadiness::ResourceSet
+    Properties:
+      ResourceSetName: !Sub ${ProjectId}-ResourceSet-ELB
+      ResourceSetType: AWS::ElasticLoadBalancingV2::LoadBalancer
+      Resources:
+        - ResourceArn: !Ref Region1ElbArnA
+          ReadinessScopes:
+            - !GetAtt Cell1A.CellArn
+        - ResourceArn: !Ref Region1ElbArnB
+          ReadinessScopes:
+            - !GetAtt Cell1B.CellArn
+        - ResourceArn: !Ref Region1ElbArnC
+          ReadinessScopes:
+            - !GetAtt Cell1C.CellArn
+
+
+  ResourceSetAsg:
+    Type: AWS::Route53RecoveryReadiness::ResourceSet
+    Properties:
+      ResourceSetName: !Sub ${ProjectId}-ResourceSet-ASG
+      ResourceSetType: AWS::AutoScaling::AutoScalingGroup
+      Resources:
+        - ResourceArn: !Ref Region1AsgArnA
+          ReadinessScopes:
+            - !GetAtt Cell1A.CellArn
+        - ResourceArn: !Ref Region1AsgArnB
+          ReadinessScopes:
+            - !GetAtt Cell1B.CellArn
+        - ResourceArn: !Ref Region1AsgArnC
+          ReadinessScopes:
+            - !GetAtt Cell1C.CellArn
+
+
+  ResourceSetAurora:
+    Type: AWS::Route53RecoveryReadiness::ResourceSet
+    Properties:
+      ResourceSetName: !Sub ${ProjectId}-ResourceSet-Aurora
+      ResourceSetType: AWS::RDS::DBCluster
+      Resources:
+        - ResourceArn: !Ref Region1AuroraClusterArn
+          ReadinessScopes: 
+            - !GetAtt Cell1.CellArn
+
+  ReadinessCheckElb:
+    Type: AWS::Route53RecoveryReadiness::ReadinessCheck
+    Properties:
+      ReadinessCheckName: !Sub ${ProjectId}-ReadinessCheck-ELB
+      ResourceSetName: !Ref ResourceSetElb
+
+  ReadinessCheckAsg:
+    Type: AWS::Route53RecoveryReadiness::ReadinessCheck
+    Properties:
+      ReadinessCheckName: !Sub ${ProjectId}-ReadinessCheck-ASG
+      ResourceSetName: !Ref ResourceSetAsg
+
+  ReadinessCheckAurora:
+    Type: AWS::Route53RecoveryReadiness::ReadinessCheck
+    Properties:
+      ReadinessCheckName: !Sub ${ProjectId}-ReadinessCheck-Aurora
+      ResourceSetName: !Ref ResourceSetAurora
+
+  Cluster:
+    Type: AWS::Route53RecoveryControl::Cluster
+    Properties:
+      Name: !Sub ${ProjectId}-Cluster
+
+  ControlPanel:
+    Type: AWS::Route53RecoveryControl::ControlPanel
+    Properties:
+      Name: !Sub ${ProjectId}-ControlPanel
+      ClusterArn: !Ref Cluster
+
+  RoutingControlCell1:
+    Type: AWS::Route53RecoveryControl::RoutingControl
+    Properties:
+      Name: !Sub 
+        - ${ProjectId}-Cell1-${Region1}
+        - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+      ClusterArn: !Ref Cluster
+      ControlPanelArn: !Ref ControlPanel
+
+  RoutingControlCell1A:
+    Type: AWS::Route53RecoveryControl::RoutingControl
+    Properties:
+      Name: !Sub 
+        - ${ProjectId}-Cell1A-${Region1}a
+        - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+      ClusterArn: !Ref Cluster
+      ControlPanelArn: !Ref ControlPanel
+
+  RoutingControlCell1B:
+    Type: AWS::Route53RecoveryControl::RoutingControl
+    Properties:
+      Name: !Sub 
+        - ${ProjectId}-Cell1B-${Region1}b
+        - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+      ClusterArn: !Ref Cluster
+      ControlPanelArn: !Ref ControlPanel
+
+  RoutingControlCell1C:
+    Type: AWS::Route53RecoveryControl::RoutingControl
+    Properties:
+      Name: !Sub 
+        - ${ProjectId}-Cell1C-${Region1}c
+        - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+      ClusterArn: !Ref Cluster
+      ControlPanelArn: !Ref ControlPanel
+
+  AssertionRuleCannotTurnOffAllZonalRoutingControls:
+    Type: AWS::Route53RecoveryControl::SafetyRule
+    Properties:
+      Name: !Sub ${ProjectId}-CannotTurnOffAllZonalRoutingControls
+      ControlPanelArn: !Ref ControlPanel
+      AssertionRule:
+        WaitPeriodMs: 5000
+        AssertedControls:
+          - !Ref RoutingControlCell1A
+          - !Ref RoutingControlCell1B
+          - !Ref RoutingControlCell1C
+      RuleConfig:
+        Type: ATLEAST
+        Threshold: 2
+        Inverted: false
+
+  RoutingControlHealthcheckCell1:
+    Type: AWS::Route53::HealthCheck
+    DependsOn: RoutingControlCell1
+    Properties:
+      HealthCheckConfig: 
+        Type: RECOVERY_CONTROL
+        RoutingControlArn: !Ref RoutingControlCell1
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub ${ProjectId}-RoutingControlHealthcheckCell1
+
+  RoutingControlHealthcheckCell1A:
+    Type: AWS::Route53::HealthCheck
+    DependsOn: RoutingControlCell1A
+    Properties:
+      HealthCheckConfig: 
+        Type: RECOVERY_CONTROL
+        RoutingControlArn: !Ref RoutingControlCell1A
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub ${ProjectId}-RoutingControlHealthcheckCell1A
+
+  RoutingControlHealthcheckCell1B:
+    Type: AWS::Route53::HealthCheck
+    DependsOn: RoutingControlCell1B
+    Properties:
+      HealthCheckConfig: 
+        Type: RECOVERY_CONTROL
+        RoutingControlArn: !Ref RoutingControlCell1B
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub ${ProjectId}-RoutingControlHealthcheckCell1B
+
+  RoutingControlHealthcheckCell1C:
+    Type: AWS::Route53::HealthCheck
+    DependsOn: RoutingControlCell1C
+    Properties:
+      HealthCheckConfig: 
+        Type: RECOVERY_CONTROL
+        RoutingControlArn: !Ref RoutingControlCell1C
+      HealthCheckTags:
+        - Key:  Name
+          Value: !Sub ${ProjectId}-RoutingControlHealthcheckCell1C
+
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !FindInMap [StaticParameters, StaticParameters, HostedZoneDomain]
+      VPCs:
+        - VPCId: !Sub ${Region1VpcId}
+          VPCRegion: !Sub 
+            - ${Region1}
+            - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+
+  RecordSetPrimary:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Failover: PRIMARY
+      AliasTarget:
+        DNSName: !Ref RecordSetWeighted1A
+        EvaluateTargetHealth: true
+        HostedZoneId: !Ref HostedZone
+      HostedZoneId: !Ref HostedZone
+      Name: !FindInMap [StaticParameters, StaticParameters, FrontEndURL]
+      SetIdentifier: Primary
+      Type: A
+      HealthCheckId: !Ref RoutingControlHealthcheckCell1
+
+  RecordSetSecondary:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Failover: SECONDARY
+      AliasTarget:
+        DNSName: !Ref RecordSetBackup
+        EvaluateTargetHealth: true
+        HostedZoneId: !Ref HostedZone
+      HostedZoneId: !Ref HostedZone
+      Name: !FindInMap [StaticParameters, StaticParameters, FrontEndURL]
+      SetIdentifier: Secondary
+      Type: A
+
+
+  RecordSetBackup:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      ResourceRecords: 
+        - 1.1.1.1
+      HostedZoneId: !Ref HostedZone
+      Name: !FindInMap [StaticParameters, StaticParameters, FrontEndBackupURL]
+      Type: A
+      TTL: 5
+
+
+  RecordSetWeighted1A:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      AliasTarget:
+        DNSName: !Ref Region1ElbDnsNameA
+        EvaluateTargetHealth: true
+        HostedZoneId: !Ref Region1ElbCanonicalHostedZoneId
+      Weight: 1
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub 
+        - r1w-${FrontEndURL}
+        - FrontEndURL: !FindInMap [StaticParameters, StaticParameters, FrontEndURL]
+      SetIdentifier: !Sub 
+          - "${Region1}a"
+          - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+      Type: A
+      HealthCheckId: !Ref RoutingControlHealthcheckCell1A
+
+  RecordSetWeighted1B:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      AliasTarget:
+        DNSName: !Ref Region1ElbDnsNameB
+        EvaluateTargetHealth: true
+        HostedZoneId: !Ref Region1ElbCanonicalHostedZoneId
+      Weight: 1
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub 
+        - r1w-${FrontEndURL}
+        - FrontEndURL: !FindInMap [StaticParameters, StaticParameters, FrontEndURL]
+      SetIdentifier: !Sub 
+          - "${Region1}b"
+          - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+      Type: A
+      HealthCheckId: !Ref RoutingControlHealthcheckCell1B
+
+  RecordSetWeighted1C:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      AliasTarget:
+        DNSName: !Ref Region1ElbDnsNameC
+        EvaluateTargetHealth: true
+        HostedZoneId: !Ref Region1ElbCanonicalHostedZoneId
+      Weight: 1
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub 
+        - r1w-${FrontEndURL}
+        - FrontEndURL: !FindInMap [StaticParameters, StaticParameters, FrontEndURL]
+      SetIdentifier: !Sub 
+          - "${Region1}c"
+          - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+      Type: A
+      HealthCheckId: !Ref RoutingControlHealthcheckCell1C

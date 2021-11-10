@@ -1,0 +1,207 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  This CloudFormation Template supports the requirements of an AWS Blog Post on Route 53 Application Recovery Controller.
+  It is the third part of a three part CloudFormation Deployment.  It has dependencies on the preceeding [1] base infrastructure deployment, and [2] Route 53 ARC deployment.
+  It should be deployed as a StackSet with us-east-1 as the first region and us-west-2 as the second region, within a single AWS account.
+  It will deploy the following Lambda functions:
+  A) Infrastructure Status Dashboard Lambda, serving a basic web page via an Internet facing ALB
+  B) Database Failover Lambda, running on a scheduled rule to carry out database failovers when required
+  It will also deploy all required supporting components such as Lambda Layers, Application Load Balancers, Security Groups, Roles, Policies, Lambda Permissions, and CloudWatch Scheduled Rules.
+  This template is provided as a sample for educational purposes and should NOT be considered production ready.
+#  Note that this template is designed in a modular way, and most relevant possible variables are stored in the 'Mappings > StaticParameters' section of the template.
+
+Conditions:
+  PrimaryRegion: !Equals
+    - !Sub ${AWS::Region}
+    - !FindInMap [StaticParameters, StaticParameters, Region1]
+
+Mappings:
+  StaticParameters:
+    StaticParameters:
+      FrontEndURL: app.arcblog.aws # This URL will be monitored for active Availability Zone or Maintenace state.
+      Region1: us-east-1 # This must match the primary application deployment region.
+      LambdaLayerS3Key: js-sdk-2_958.zip # This must be the filename of a zip containing a suitable AWS SDK v2.958 or higher Lambda Layer deployment package.
+      DashboardLambdaS3Key: dashboard-lambda.zip # This must be the filename of a zip containing the Dashboard lambda code.
+      DashboardLambdaMaxRows: 30 # This controls how many previous state entries are presented on the dashboard.
+      DashboardLambdaCheckInterval: 5 # This controls how frequently in seconds the dashboard is updated.
+      LambdaAccessCidrIp: 0.0.0.0/0 # This controls what source IPs are allowed to access the dashboard. IT IS RECOMMENDED TO UPDATE THIS TO A MORE GRANULAR CONFIGURATION.
+  RegionalParameters:
+    us-east-1:
+      LambdaCodeS3Bucket: <CHANGEME bucketname> # This path must be set to an S3 bucket in Region 1 which hosts the CloudFormation deployment artefacts.  It must be in the form bucketname.
+      DashboardLambdaResolvers: "10.0.0.2" # This must be the address of the "VPC .2 Resolver" for the Lambda (and app) VPC.
+
+Parameters:
+  ProjectId:
+    Type: String
+    Description: Please enter a Project ID or Name which will be used for naming objects created by this template.  Must begin with a letter, contain only alphanumeric characters, and be shorter than 10 characters.
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    MaxLength: 10
+    ConstraintDescription: Must begin with a letter, contain only alphanumeric characters, and be shorter than 10 characters.
+    Default: arcblog
+  Region1VpcId:
+    Type: String
+    Description: Region 1 VPC ID
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: 
+          default: General Configuration Parameters
+        Parameters:
+          - ProjectId
+          - usEast1ClusterEndpoint
+      - Label:
+          default: Region 1 Configuration Parameters
+        Parameters:
+          - Region1VpcId
+          - Region1AuroraClusterArn
+          - Region1RoutingControlArn
+    ParameterLabels:
+      ProjectId:
+        default: Please enter a Project ID or Name which will be used for naming objects created by this template.  If using this template in conjunction with the base blog infrastructure deployment you must use the same Project ID.
+      usEast1ClusterEndpoint: 
+        default: Please enter the Route 53 Application Recovery Controller Cluster Endpoint for us-east-1
+      Region1VpcId:
+        default: Please enter the VPC ID for the Application VPC in Region 1
+
+Outputs:
+  DashboardLambdaUrl:
+    Description: URL for Dashboard Lambda
+    Value: !GetAtt DashboardLambdaAlb.DNSName
+
+Resources:
+  DashboardLambdaAlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: 
+      Name: !Sub ${ProjectId}-DashboardLambdaAlb
+      IpAddressType: ipv4
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref DashboardLambdaAlbSG
+      Subnets: 
+        - !ImportValue stack-network-PublicSubnet1A #THIS IMPORT DEPENDS ON THE DEPLOYMENT OF THE APPLICATION STACK
+        - !ImportValue stack-network-PublicSubnet1B #THIS IMPORT DEPENDS ON THE DEPLOYMENT OF THE APPLICATION STACK
+        - !ImportValue stack-network-PublicSubnet1C #THIS IMPORT DEPENDS ON THE DEPLOYMENT OF THE APPLICATION STACK
+      Type: application
+
+  DashboardLambdaAlbTG:
+    DependsOn: DashboardLambdaPermission
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${ProjectId}-DashboardLambdaAlbTG
+      TargetType: lambda
+      Targets:
+        - Id: !GetAtt DashboardLambda.Arn
+
+  DashboardLambdaAlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties: 
+      DefaultActions: 
+        - Type: forward
+          TargetGroupArn: !Ref DashboardLambdaAlbTG
+      LoadBalancerArn: !Ref DashboardLambdaAlb
+      Port: 80
+      Protocol: HTTP
+
+  DashboardLambdaAlbSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for Dashboard Lambda ALB
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !FindInMap [StaticParameters, StaticParameters, LambdaAccessCidrIp]
+          Description: Allow inbound access to Lambda for HTTP requests. WARNING this access should be restricted in a production environment.
+      SecurityGroupEgress:
+        - !Ref AWS::NoValue
+      VpcId: !ImportValue stack-network-VpcID #THIS IMPORT DEPENDS ON THE DEPLOYMENT OF THE APPLICATION STACK
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectId}-DashboardLambdaAlbSG'
+
+  DashboardLambdaSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for Dashboard Lambda
+      SecurityGroupIngress:
+        - !Ref AWS::NoValue
+      SecurityGroupEgress:
+        - !Ref AWS::NoValue
+      VpcId: !ImportValue stack-network-VpcID #THIS IMPORT DEPENDS ON THE DEPLOYMENT OF THE APPLICATION STACK
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectId}-DashboardLambdaSG'
+
+  DashboardLambdaRole:
+    Condition: PrimaryRegion
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Sid: ''
+      Policies:
+        - PolicyName: !Sub ${ProjectId}-DashboardLambdaPolicy
+          PolicyDocument:
+            Statement:
+            - Action:
+              - ec2:CreateNetworkInterface
+              - ec2:DeleteNetworkInterface
+              - ec2:DescribeNetworkInterfaces
+              Effect: Allow
+              Resource:
+              - '*'
+            - Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              Effect: Allow
+              Resource:
+              - !Sub 
+                - 'arn:aws:logs:${Region1}:${AWS::AccountId}:*'
+                - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+              - !Sub 
+                - 'arn:aws:logs:${Region1}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectId}-Dashboard:*'
+                - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+      Path: /
+      RoleName: !Sub '${ProjectId}-DashboardLambdaRole'
+
+  DashboardLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref DashboardLambda
+      Principal: elasticloadbalancing.amazonaws.com
+      SourceArn: !Sub 'arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:*'
+
+  DashboardLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Lambda for status dashboard
+      FunctionName: !Sub ${ProjectId}-Dashboard
+      Role: !If [PrimaryRegion, !GetAtt DashboardLambdaRole.Arn, !Sub 'arn:aws:iam::${AWS::AccountId}:role/${ProjectId}-DashboardLambdaRole']
+      Runtime: nodejs12.x
+      Handler: dashboard-lambda.handler
+      Environment:
+        Variables: 
+          DeploymentRegions: !Sub
+            - "[\"${Region1}\"]"
+            - Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+          VpcIds: !Sub "[\"${Region1VpcId}\"]"
+          Resolvers: !FindInMap [RegionalParameters, !Ref AWS::Region, DashboardLambdaResolvers]
+          Dns: !FindInMap [StaticParameters, StaticParameters, FrontEndURL]
+          MaxRows: !FindInMap [StaticParameters, StaticParameters, DashboardLambdaMaxRows]
+          CheckInterval: !FindInMap [StaticParameters, StaticParameters, DashboardLambdaCheckInterval]
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref DashboardLambdaSG
+        SubnetIds:
+          - !ImportValue stack-network-PrivateSubnet2A #THIS IMPORT DEPENDS ON THE DEPLOYMENT OF THE APPLICATION STACK
+          - !ImportValue stack-network-PrivateSubnet2B #THIS IMPORT DEPENDS ON THE DEPLOYMENT OF THE APPLICATION STACK
+          - !ImportValue stack-network-PrivateSubnet2C #THIS IMPORT DEPENDS ON THE DEPLOYMENT OF THE APPLICATION STACK
+      Code:
+        S3Bucket: !FindInMap [RegionalParameters, !Ref AWS::Region, LambdaCodeS3Bucket]
+        S3Key: !FindInMap [StaticParameters, StaticParameters, DashboardLambdaS3Key]

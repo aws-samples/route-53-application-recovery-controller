@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: DB stack for regional deployment
+Conditions:
+  PrimaryRegion: !Equals
+    - !Sub ${AWS::Region}
+    - !Ref Region1
+  DBQty1: !Equals
+    - !Ref DBQuantity
+    - 1
+  DBQty2: !Equals
+    - !Ref DBQuantity
+    - 2
+  CreateInstance1: !Or
+    - !Condition DBQty1
+    - !Condition DBQty2
+    - !Condition CreateInstance3
+  CreateInstance2: !Or
+    - !Condition DBQty2
+    - !Condition CreateInstance3
+  CreateInstance3: !Equals
+    - !Ref DBQuantity
+    - 3
+
+Parameters:
+  ProjectId:
+    Type: String
+    Description: Project ID used to name project resources and create roles
+  DBInstanceClass:
+    Type: String
+    Description: Instance Class for Database deployment
+  DBName:
+    Type: String
+    Description: Database name for creation
+  DBQuantity:
+    Type: Number
+    Description: Number of databases to deploy per region
+  Region1:
+    Type: String
+    Description: Primary deployment Region name (must match first region being used for template deployment)
+  Region2:
+    Type: String
+    Description: Secondary deployment Region name
+
+Resources:
+  DBKMSKey:
+    Type: AWS::KMS::Key
+    Description: KMS Key for Database use
+    Properties:
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-default-1
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal: 
+              AWS: !Join
+                - ''
+                - - 'arn:aws:iam::'
+                  - !Ref AWS::AccountId
+                  - :root
+            Action: kms:*
+            Resource: "*"
+
+  DBSecret:
+    Condition: PrimaryRegion
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: "Secret for Database Connectivity"
+      KmsKeyId: !Ref DBKMSKey
+      GenerateSecretString:
+        ExcludePunctuation: true
+        GenerateStringKey: "password"
+        SecretStringTemplate: '{"username":"postgres"}'
+      Name: !Sub ${ProjectId}-DBSecret
+      ReplicaRegions:
+        - Region: !If [PrimaryRegion, !Ref Region2, !Ref Region1]
+
+  DBGlobalCluster:
+    Condition: PrimaryRegion
+    Type: AWS::RDS::GlobalCluster
+    Description: Global Database Cluster
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: '12.8'
+      GlobalClusterIdentifier: !Sub ${ProjectId}-global-cluster
+      StorageEncrypted: true
+
+  DBCluster:
+    Type: AWS::RDS::DBCluster
+    Description: Database Cluster
+    DeletionPolicy: Delete
+    Properties:
+      DatabaseName: !If [PrimaryRegion, !Ref DBName, !Ref AWS::NoValue]
+      DBClusterIdentifier: !Sub ${ProjectId}-cluster-${AWS::Region}
+      DBClusterParameterGroupName: default.aurora-postgresql12
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      EnableCloudwatchLogsExports:
+        - postgresql
+      EnableIAMDatabaseAuthentication: true
+      Engine: aurora-postgresql
+      EngineMode: global
+      EngineVersion: '12.8'
+      GlobalClusterIdentifier: !If [PrimaryRegion, !Ref DBGlobalCluster, !Sub '${ProjectId}-global-cluster'] 
+      KmsKeyId: !Ref DBKMSKey
+      MasterUsername: !If [PrimaryRegion, !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}', !Ref AWS::NoValue]
+      MasterUserPassword: !If [PrimaryRegion, !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}', !Ref AWS::NoValue]
+      StorageEncrypted: true
+      SourceRegion: !If [PrimaryRegion, !Ref AWS::NoValue, !Ref Region1]
+      VpcSecurityGroupIds:
+        - !Ref DBSG
+
+  DBInstance1:
+    Condition: CreateInstance1
+    Type: AWS::RDS::DBInstance
+    Description: Database Instance
+    Properties:
+      DBClusterIdentifier: !Ref DBCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      DBInstanceIdentifier: !Sub ${ProjectId}-instance1-${AWS::Region}
+      EnablePerformanceInsights: true
+      Engine: aurora-postgresql
+      PerformanceInsightsKMSKeyId: !Ref DBKMSKey
+      PubliclyAccessible: false
+
+  DBInstance2:
+    Condition: CreateInstance2
+    Type: AWS::RDS::DBInstance
+    Description: Database Instance
+    Properties:
+      DBClusterIdentifier: !Ref DBCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      DBInstanceIdentifier: !Sub ${ProjectId}-instance2-${AWS::Region}
+      EnablePerformanceInsights: true
+      Engine: aurora-postgresql
+      PerformanceInsightsKMSKeyId: !Ref DBKMSKey
+      PubliclyAccessible: false
+
+  DBInstance3:
+    Condition: CreateInstance3
+    Type: AWS::RDS::DBInstance
+    Description: Database Instance
+    Properties:
+      DBClusterIdentifier: !Ref DBCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      DBInstanceIdentifier: !Sub ${ProjectId}-instance3-${AWS::Region}
+      EnablePerformanceInsights: true
+      Engine: aurora-postgresql
+      PerformanceInsightsKMSKeyId: !Ref DBKMSKey
+      PubliclyAccessible: false
+
+  DBSubnetGroup:
+    Type:  AWS::RDS::DBSubnetGroup
+    Description: DB Subnet Group
+    Properties:
+      DBSubnetGroupDescription: !Sub ${ProjectId} DB Subnet Group
+      SubnetIds:
+        - !ImportValue stack-network-PrivateSubnet2A
+        - !ImportValue stack-network-PrivateSubnet2B
+        - !ImportValue stack-network-PrivateSubnet2C
+
+  DBSG:
+    Type: AWS::EC2::SecurityGroup
+    Description: Security Group for Database servers
+    Properties:
+      GroupDescription: Security Group for Database servers
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !ImportValue stack-appA-FrontEndSG
+          Description: Allow inbound access from FrontEnd Security Group to database on Port 3306
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !ImportValue stack-appB-FrontEndSG
+          Description: Allow inbound access from FrontEnd Security Group to database on Port 3306
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !ImportValue stack-appC-FrontEndSG
+          Description: Allow inbound access from FrontEnd Security Group to database on Port 3306
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+          Description: Allow outbound access from Database instances for logging etc. WARNING this access should be restricted in a production environment.
+      VpcId: !ImportValue stack-network-VpcID
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectId}-DBSG'

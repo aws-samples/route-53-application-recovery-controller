@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  This CloudFormation Template supports the requirements of an AWS Blog Post on Route 53 Application Recovery Controller.
+  It is the first part of a three part CloudFormation Deployment. It is intended to be followed by [2] Route53 ARC and [3] supporting Lambda CloudFormation deployments.
+  It should be deployed as a StackSet with us-east-1 as the first region and us-west-2 as the second region, within a single AWS account.
+  It uses the CloudFormation Nested Stack approach, with 3 child stacks to deploy the following components across each target region:
+  A) Network Stack - Base level infrastructure including public/private subnets, Internet gateway, NAT gateway, route tables, etc.
+  B) Application Stack - Application level infrastructure including Network Load Balancers, AutoScaling Groups, etc.
+  C) Database Stack - Database level infrastructure including KMS Keys, Secrets, Database clusters and nodes, etc.
+  This template is provided as a sample for educational purposes and should NOT be considered production ready.
+#  Note that this template is designed in a modular way, and most relevant possible variables are stored in the 'Mappings > StaticParameters' section of the template.
+#  These parameters can be modified by advanced users at their own risk.
+#  Note that the resources deployed using this template will cost approx. $2/hr. Please be sure to clean up all resources by deleting the CloudFormation Stacks when they are no longer required.
+
+Mappings:
+  StaticParameters:
+    StaticParameters:
+      TemplatePath: <CHANGEME bucketname.s3.region-id> # This path must be set to an S3 bucket in Region 1 which hosts the CloudFormation deployment artefacts. It must be in the form bucketname.s3.region-code.
+      LatestAmiId: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2' # Set this to the desired Amazon Machine Image descriptor to launch the EC2 instances with
+      DBName: blog_database # Set this to the desired database name for initialisation on the Aurora cluster
+      InstanceType: t3.small # Set this to the desired instance type for EC2 instances
+      DBInstanceClass: db.r5.large # Set this to the desired database type for database instances
+      NlbScheme: internal # Set this to the desired ELB Schema for the NLBs
+      Region1: us-east-1 # Set this to the primary deployment region
+      Region2: us-west-2 # Set this to the secondary deployment region
+  RegionalParameters:
+    us-east-1: # This must match Region1 above
+      VpcCidr: 10.0.0.0/16 # Set this to the desired VPC CIDR for use in Region 1
+      DBQuantity: 3 # Set this to the desired number of database instances in Region 1
+      AsgMin: 1 # Set this to the desired minimum number of EC2 instances in Region 1
+      AsgMax: 6 # Set this to the desired maximum number of EC2 instances in Region 1
+    us-west-2: # This must match Region2 above
+      VpcCidr: 10.1.0.0/16 # Set this to the desired VPC CIDR for use in Region 2
+      DBQuantity: 3 # Set this to the desired number of database instances in Region 2
+      AsgMin: 1 # Set this to the desired minimum number of EC2 instances in Region 2
+      AsgMax: 6 # Set this to the desired maximum number of EC2 instances in Region 2
+
+Parameters:
+  ProjectId:
+    Type: String
+    Description: Please enter a Project ID or Name which will be used for naming objects created by this template. It is recommended to leave this as the default 'arcblog'. It must be all lowercase letters, and be 3-10 characters.
+    AllowedPattern: '[a-z]*'
+    MinLength: 3
+    MaxLength: 10
+    ConstraintDescription: Must be all lowercase letters, and be 3-10 characters.
+    Default: arcblog
+
+Resources:
+  NetworkStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: !Sub 
+        - "https://${TemplatePath}.amazonaws.com/stack-network.yml"
+        - TemplatePath: !FindInMap [StaticParameters, StaticParameters, TemplatePath]
+      Parameters:
+        ProjectId: !Ref ProjectId
+        VpcCidr: !FindInMap 
+          - RegionalParameters 
+          - !Ref AWS::Region
+          - VpcCidr
+
+  AppStackA:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: NetworkStack
+    Properties:
+      TemplateURL: !Sub 
+        - "https://${TemplatePath}.amazonaws.com/stack-appcell.yml"
+        - TemplatePath: !FindInMap [StaticParameters, StaticParameters, TemplatePath]
+      Parameters:
+        ProjectId: !Ref ProjectId
+        InstanceType: !FindInMap [StaticParameters, StaticParameters, InstanceType]
+        ImageId: !FindInMap [StaticParameters, StaticParameters, LatestAmiId]
+        Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+        AllowedCidr: !FindInMap 
+          - RegionalParameters 
+          - !Ref AWS::Region
+          - VpcCidr
+        NlbScheme: !FindInMap [StaticParameters, StaticParameters, NlbScheme]
+        AsgMin: !FindInMap 
+          - RegionalParameters 
+          - !Ref AWS::Region
+          - AsgMin
+        AsgMax: !FindInMap 
+          - RegionalParameters 
+          - !Ref AWS::Region
+          - AsgMax
+        CellId: A
+
+  AppStackB:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: NetworkStack
+    Properties:
+      TemplateURL: !Sub 
+        - "https://${TemplatePath}.amazonaws.com/stack-appcell.yml"
+        - TemplatePath: !FindInMap [StaticParameters, StaticParameters, TemplatePath]
+      Parameters:
+        ProjectId: !Ref ProjectId
+        InstanceType: !FindInMap [StaticParameters, StaticParameters, InstanceType]
+        ImageId: !FindInMap [StaticParameters, StaticParameters, LatestAmiId]
+        Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+        AllowedCidr: !FindInMap 
+          - RegionalParameters 
+          - !Ref AWS::Region
+          - VpcCidr
+        NlbScheme: !FindInMap [StaticParameters, StaticParameters, NlbScheme]
+        AsgMin: !FindInMap 
+          - RegionalParameters 
+          - !Ref AWS::Region
+          - AsgMin
+        AsgMax: !FindInMap 
+          - RegionalParameters 
+          - !Ref AWS::Region
+          - AsgMax
+        CellId: B
+
+  AppStackC:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: NetworkStack
+    Properties:
+      TemplateURL: !Sub 
+        - "https://${TemplatePath}.amazonaws.com/stack-appcell.yml"
+        - TemplatePath: !FindInMap [StaticParameters, StaticParameters, TemplatePath]
+      Parameters:
+        ProjectId: !Ref ProjectId
+        InstanceType: !FindInMap [StaticParameters, StaticParameters, InstanceType]
+        ImageId: !FindInMap [StaticParameters, StaticParameters, LatestAmiId]
+        Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+        AllowedCidr: !FindInMap 
+          - RegionalParameters 
+          - !Ref AWS::Region
+          - VpcCidr
+        NlbScheme: !FindInMap [StaticParameters, StaticParameters, NlbScheme]
+        AsgMin: !FindInMap 
+          - RegionalParameters 
+          - !Ref AWS::Region
+          - AsgMin
+        AsgMax: !FindInMap 
+          - RegionalParameters 
+          - !Ref AWS::Region
+          - AsgMax
+        CellId: C
+
+  DbStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: 
+      - AppStackA 
+      - AppStackB
+      - AppStackC
+    Properties:
+      TemplateURL: !Sub 
+        - "https://${TemplatePath}.amazonaws.com/stack-db.yml"
+        - TemplatePath: !FindInMap [StaticParameters, StaticParameters, TemplatePath]
+      Parameters:
+        ProjectId: !Ref ProjectId
+        DBInstanceClass: !FindInMap [StaticParameters, StaticParameters, DBInstanceClass]
+        DBName: !FindInMap [StaticParameters, StaticParameters, DBName]
+        DBQuantity: !FindInMap 
+          - RegionalParameters 
+          - !Ref AWS::Region
+          - DBQuantity
+        Region1: !FindInMap [StaticParameters, StaticParameters, Region1]
+        Region2: !FindInMap [StaticParameters, StaticParameters, Region2]

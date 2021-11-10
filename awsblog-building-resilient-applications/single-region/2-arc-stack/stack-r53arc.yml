@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description:  |
   This CloudFormation Template supports the requirements of an AWS Blog Post on Route 53 Application Recovery Controller.
-  It is the second part of a three part CloudFormation Deployment.  It has dependencies on the preceeding [1] base infrastructure deployment, and is required for [3] supporting Lambda deployment.
+  It is the second part of a three part CloudFormation Deployment. It has dependencies on the preceeding [1] base infrastructure deployment, and is required for [3] supporting Lambda deployment.
   It should be deployed as a standard Stack in us-east-1, within a single AWS account.
   It will deploy the following Route 53 Application Recovery Controller components:
   A) Recovery Readiness Groups, Cells, and Resource Sets
@@ -10,23 +10,24 @@ Description:  |
   This template is provided as a sample for educational purposes and should NOT be considered production ready.
 #  Note that this template is designed in a modular way, and most relevant possible variables are stored in the 'Mappings > StaticParameters' section of the template.
 #  These parameters can be modified by advanced users at their own risk.
-#  Note that the resources deployed using this template will cost approx. $2.50/hr.  Please be sure to clean up all resources by deleting the CloudFormation Stacks when they are no longer required.
+#  Note that the resources deployed using this template will cost approx. $2.50/hr. Please be sure to clean up all resources by deleting the CloudFormation Stacks when they are no longer required.
 
 Mappings:
   StaticParameters:
     StaticParameters:
-      FrontEndURL: app.arcblog.aws # This URL will be created in Route 53 as the sample application address.  It must be within the HostedZoneDomain.
-      FrontEndBackupURL: maintenance.arcblog.aws # This URL will be created in Route 53 as the sample maintenace address.  It must be within the HostedZoneDomain.
-      HostedZoneDomain: arcblog.aws # This Hosted Zone will be created in Route 53.  The domains above must be within it.
+      FrontEndURL: app.arcblog.aws # This URL will be created in Route 53 as the sample application address. It must be within the HostedZoneDomain.
+      FrontEndBackupURL: maintenance.arcblog.aws # This URL will be created in Route 53 as the sample maintenace address. It must be within the HostedZoneDomain.
+      HostedZoneDomain: arcblog.aws # This Hosted Zone will be created in Route 53. The domains above must be within it.
       Region1: us-east-1 # This must match the primary application deployment region.
 
 Parameters:
   ProjectId:
     Type: String
-    Description: Please enter a Project ID or Name which will be used for naming objects created by this template.  Must begin with a letter, contain only alphanumeric characters, and be shorter than 10 characters.
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    Description: Please enter a Project ID or Name which will be used for naming objects created by this template. It is recommended to leave this as the default 'arcblog'. It must be all lowercase letters, and be 3-10 characters.
+    AllowedPattern: '[a-z]*'
+    MinLength: 3
     MaxLength: 10
-    ConstraintDescription: Must begin with a letter, contain only alphanumeric characters, and be shorter than 10 characters.
+    ConstraintDescription: Must be all lowercase letters, and be 3-10 characters.
     Default: arcblog
   Region1VpcId:
     Type: String
@@ -89,7 +90,7 @@ Metadata:
           - Region1AuroraClusterArn
     ParameterLabels:
       ProjectId:
-        default: Please enter a Project ID or Name which will be used for naming objects created by this template.  If using this template in conjunction with the base blog infrastructure deployment you must use the same Project ID.
+        default: Please enter a Project ID or Name which will be used for naming objects created by this template. If using this template in conjunction with the base blog infrastructure deployment you must use the same Project ID.
       Region1VpcId:
         default: Please enter the ID of the VPC in the primary region.
       Region1ElbDnsNameA:

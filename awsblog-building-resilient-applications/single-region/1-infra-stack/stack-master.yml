@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: |
   This CloudFormation Template supports the requirements of an AWS Blog Post on Route 53 Application Recovery Controller.
-  It is the first part of a three part CloudFormation Deployment.  It is intended to be followed by [2] Route53 ARC and [3] supporting Lambda CloudFormation deployments.
+  It is the first part of a three part CloudFormation Deployment. It is intended to be followed by [2] Route53 ARC and [3] supporting Lambda CloudFormation deployments.
   It should be deployed as a StackSet with us-east-1 as the first region and us-west-2 as the second region, within a single AWS account.
   It uses the CloudFormation Nested Stack approach, with 3 child stacks to deploy the following components across each target region:
   A) Network Stack - Base level infrastructure including public/private subnets, Internet gateway, NAT gateway, route tables, etc.
@@ -10,12 +10,12 @@ Description: |
   This template is provided as a sample for educational purposes and should NOT be considered production ready.
 #  Note that this template is designed in a modular way, and most relevant possible variables are stored in the 'Mappings > StaticParameters' section of the template.
 #  These parameters can be modified by advanced users at their own risk.
-#  Note that the resources deployed using this template will cost approx. $1/hr.  Please be sure to clean up all resources by deleting the CloudFormation Stacks when they are no longer required.
+#  Note that the resources deployed using this template will cost approx. $1/hr. Please be sure to clean up all resources by deleting the CloudFormation Stacks when they are no longer required.
 
 Mappings:
   StaticParameters:
     StaticParameters:
-      TemplatePath: <CHANGEME bucketname.s3.region-id> # This path must be set to an S3 bucket in Region 1 which hosts the CloudFormation deployment artefacts.  It must be in the form bucketname.s3.region-code.
+      TemplatePath: <CHANGEME bucketname.s3.region-id> # This path must be set to an S3 bucket in Region 1 which hosts the CloudFormation deployment artefacts. It must be in the form bucketname.s3.region-code.
       LatestAmiId: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2' # Set this to the desired Amazon Machine Image descriptor to launch the EC2 instances with
       DBName: blog_database # Set this to the desired database name for initialisation on the Aurora cluster
       InstanceType: t3.small # Set this to the desired instance type for EC2 instances
@@ -32,10 +32,11 @@ Mappings:
 Parameters:
   ProjectId:
     Type: String
-    Description: Please enter a Project ID or Name which will be used for naming objects created by this template.  Must begin with a letter, contain only alphanumeric characters, and be shorter than 10 characters.
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    Description: Please enter a Project ID or Name which will be used for naming objects created by this template. It is recommended to leave this as the default 'arcblog'. It must be all lowercase letters, and be 3-10 characters.
+    AllowedPattern: '[a-z]*'
+    MinLength: 3
     MaxLength: 10
-    ConstraintDescription: Must begin with a letter, contain only alphanumeric characters, and be shorter than 10 characters.
+    ConstraintDescription: Must be all lowercase letters, and be 3-10 characters.
     Default: arcblog
 
 Resources:

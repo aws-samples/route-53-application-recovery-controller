@@ -32,7 +32,7 @@ Mappings:
       LambdaCodeS3Bucket: <CHANGEME bucketname-region1> # This path must be set to an S3 bucket in Region 1 which hosts the CloudFormation deployment artefacts. It must be in the form bucketname.
       DashboardLambdaResolvers: "10.0.0.2" # This must be the address of the "VPC .2 Resolver" for the Lambda (and app) VPC.
     us-west-2: 
-      LambdaCodeS3Bucket: <CHANGEME bucketname-region2> # This path must be set to an S3 bucket in Region 1 which hosts the CloudFormation deployment artefacts. It must be in the form bucketname.
+      LambdaCodeS3Bucket: <CHANGEME bucketname-region2> # This path must be set to an S3 bucket in Region 2 which hosts the CloudFormation deployment artefacts. It must be in the form bucketname.
       DashboardLambdaResolvers: "10.1.0.2" # This must be the address of the "VPC .2 Resolver" for the Lambda (and app) VPC.
 
 Parameters:

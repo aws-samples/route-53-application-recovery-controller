@@ -10,7 +10,7 @@ c. Database Stack - Database level infrastructure including KMS Keys, Secrets, D
 Please be mindful that the resources deployed for the purposes of this sample will cost approx. $1/hr. Please be sure to clean up all resources by deleting the CloudFormation Stacks when they are no longer required.
 
 ### Deployment Activities
-* The three nested stack templates, `stack-network.yml`, `stack-app.yml`, and `stack-network.yml` must be uploaded to an S3 Bucket which is either public, or accessible via the IAM credentials used for the StackSet deployment.
+* The three nested stack templates, `stack-network.yml`, `stack-appcell.yml`, and `stack-db.yml` must be uploaded to an S3 Bucket which is either public, or accessible via the IAM credentials used for the StackSet deployment.
 * The name of this S3 Bucket must be updated in the `TemplatePath` mapping in the `stack-master.yml` file prior to initiation of deployment. The name should be in the format _bucketname_.s3._region_
 
 **Notes:**

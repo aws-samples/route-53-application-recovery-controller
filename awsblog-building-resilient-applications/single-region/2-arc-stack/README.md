@@ -4,7 +4,7 @@ This CloudFormation (CFN) Template supports the requirements of an AWS Blog Post
 
 This *2-arc-stack* should be deployed as a standard Stack in us-east-1, within a single AWS account. It will deploy the following Route 53 Application Recovery Controller components:  
 * Recovery Readiness Groups, Cells, and Resource Sets  
-* Routing Control Clusters, Control Panels, Routing Controls, Safety Rules, and Healthchecks  
+* Routing Control Clusters, Control Panels, Routing Controls, Safety Rules, and Health Checks  
 * Route 53 DNS Private Hosted Zone and associated DNS entries  
 
 Please be mindful that the resources deployed for the purposes of this sample will cost approx. $2.50/hr. Please be sure to clean up all resources by deleting the CloudFormation Stacks when they are no longer required.
@@ -15,6 +15,6 @@ Please note that after deployment of this template, you will need to enable the 
 
 **Notes:**
 
-* Sensible defaults for almost all configuration options are provided in the "Mappings" section of the `stack-lambdas.yml` template to accelerate deployment of the collective infrastructure. These may be edited prior to deployment but doing so may result in unexpected behaviour. \ 
+* Sensible defaults for almost all configuration options are provided in the "Mappings" section of the `stack-lambdas.yml` template to accelerate deployment of the collective infrastructure. These may be edited prior to deployment but doing so may result in unexpected behaviour. 
 
 **This sample is provided for demonstration and learning purposes only, and should be reviewed for alignment with organisational policies and best practices before any production use.**

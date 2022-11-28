@@ -1,6 +1,6 @@
 # Route 53 Application Recovery Controller Blog Post - Application Recovery Controller Stack Code
 
-This CloudFormation (CFN) Template supports the requirements of an AWS Blog Post on Route 53 Application Recovery Controller. It is the second of a three CFN Deployment. Deploy the *[1-infra-stackset]*(https://github.com/aws-samples/route-53-application-recovery-controller/single-region/1-infra-stackset/) before deploying this stack. 
+This CloudFormation (CFN) Template supports the requirements of an AWS Blog Post on Route 53 Application Recovery Controller. It is the second of a three CFN Deployment. Deploy the *[1-infra-stack](../1-infra-stack)* before deploying this stack. 
 
 This *2-arc-stack* should be deployed as a standard Stack in us-east-1, within a single AWS account. It will deploy the following Route 53 Application Recovery Controller components:  
 * Recovery Readiness Groups, Cells, and Resource Sets  

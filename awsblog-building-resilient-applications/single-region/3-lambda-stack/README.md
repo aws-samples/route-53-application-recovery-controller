@@ -1,6 +1,6 @@
 # Route 53 Application Recovery Controller Blog Post - Lambda Stack Code
 
-This CloudFormation (CFN) Template supports the requirements of an AWS Blog Post on Route 53 Application Recovery Controller. It is the third and the final CFN. Deploy the *[1-infra-stackset](https://github.com/aws-samples/route-53-application-recovery-controller/single-region/1-infra-stackset/)* and the *[2-arc-stack](hhttps://github.com/aws-samples/route-53-application-recovery-controller/single-region/2-arc-stack)* before deploying this stack.
+This CloudFormation (CFN) Template supports the requirements of an AWS Blog Post on Route 53 Application Recovery Controller. It is the third and the final CFN. Deploy the *[1-infra-stack](../1-infra-stack)* and the *[2-arc-stack](../2-arc-stack)* before deploying this stack.
 
 This CFN will deploy a Lambda function that serves a basic web page via an Internet facing ALB. This CFN will also deploy all required supporting components such as Lambda Layers, Application Load Balancers, Security Groups, Roles, Policies, LambdaPermissions, and CloudWatch Scheduled Rules.
 

@@ -77,13 +77,22 @@ Resources:
       ReplicaRegions:
         - Region: !If [PrimaryRegion, !Ref Region2, !Ref Region1]
 
+  DBClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties: 
+      DBClusterParameterGroupName: !Sub ${ProjectId}-dbcluster-paramgroup
+      Description: Parameter Group for ARC Blog
+      Family: aurora-postgresql14
+      Parameters:
+        timezone: US/Eastern
+
   DBGlobalCluster:
     Condition: PrimaryRegion
     Type: AWS::RDS::GlobalCluster
     Description: Global Database Cluster
     Properties:
       Engine: aurora-postgresql
-      EngineVersion: '12.8'
+      EngineVersion: 14.5
       GlobalClusterIdentifier: !Sub ${ProjectId}-global-cluster
       StorageEncrypted: true
 
@@ -94,14 +103,14 @@ Resources:
     Properties:
       DatabaseName: !If [PrimaryRegion, !Ref DBName, !Ref AWS::NoValue]
       DBClusterIdentifier: !Sub ${ProjectId}-cluster-${AWS::Region}
-      DBClusterParameterGroupName: default.aurora-postgresql12
+      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       EnableCloudwatchLogsExports:
         - postgresql
       EnableIAMDatabaseAuthentication: true
       Engine: aurora-postgresql
       EngineMode: global
-      EngineVersion: '12.8'
+      EngineVersion: 14.5
       GlobalClusterIdentifier: !If [PrimaryRegion, !Ref DBGlobalCluster, !Sub '${ProjectId}-global-cluster'] 
       KmsKeyId: !Ref DBKMSKey
       MasterUsername: !If [PrimaryRegion, !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}', !Ref AWS::NoValue]

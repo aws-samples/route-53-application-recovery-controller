@@ -72,6 +72,15 @@ Resources:
         SecretStringTemplate: '{"username":"postgres"}'
       Name: !Sub ${ProjectId}-DBSecret
 
+  DBClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties: 
+      DBClusterParameterGroupName: !Sub ${ProjectId}-dbcluster-paramgroup
+      Description: Parameter Group for ARC Blog
+      Family: aurora-postgresql14
+      Parameters:
+        timezone: US/Eastern
+
   DBCluster:
     Type: AWS::RDS::DBCluster
     Description: Database Cluster
@@ -79,12 +88,13 @@ Resources:
     Properties:
       DatabaseName: !If [PrimaryRegion, !Ref DBName, !Ref AWS::NoValue]
       DBClusterIdentifier: !Sub ${ProjectId}-cluster-${AWS::Region}
-      DBClusterParameterGroupName: default.aurora-postgresql12
+      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       EnableCloudwatchLogsExports:
         - postgresql
       EnableIAMDatabaseAuthentication: true
       Engine: aurora-postgresql
+      EngineVersion: 14.5
       KmsKeyId: !Ref DBKMSKey
       MasterUsername: !If [PrimaryRegion, !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}', !Ref AWS::NoValue]
       MasterUserPassword: !If [PrimaryRegion, !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}', !Ref AWS::NoValue]

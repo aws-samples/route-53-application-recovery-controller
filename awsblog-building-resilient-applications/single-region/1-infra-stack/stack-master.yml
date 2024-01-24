@@ -25,7 +25,7 @@ Mappings:
   RegionalParameters:
     us-east-1: # This must match Region1 above
       VpcCidr: 10.0.0.0/16 # Set this to the desired VPC CIDR for use in Region 1
-      DBQuantity: 3 # Set this to the desired number of database instances in Region 1
+      DBQuantity: 2 # Set this to the desired number of database instances in Region 1
       AsgMin: 1 # Set this to the desired minimum number of EC2 instances in Region 1
       AsgMax: 6 # Set this to the desired maximum number of EC2 instances in Region 1
 

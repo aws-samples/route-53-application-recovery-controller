@@ -79,7 +79,6 @@ Resources:
     Properties:
       DatabaseName: !If [PrimaryRegion, !Ref DBName, !Ref AWS::NoValue]
       DBClusterIdentifier: !Sub ${ProjectId}-cluster-${AWS::Region}
-      DBClusterParameterGroupName: default.aurora-postgresql12
       DBSubnetGroupName: !Ref DBSubnetGroup
       EnableCloudwatchLogsExports:
         - postgresql

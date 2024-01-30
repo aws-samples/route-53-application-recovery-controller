@@ -181,7 +181,7 @@ Resources:
       Description: Lambda for status dashboard
       FunctionName: !Sub ${ProjectId}-Dashboard
       Role: !If [PrimaryRegion, !GetAtt DashboardLambdaRole.Arn, !Sub 'arn:aws:iam::${AWS::AccountId}:role/${ProjectId}-DashboardLambdaRole']
-      Runtime: nodejs12.x
+      Runtime: nodejs16.x
       Handler: dashboard-lambda.handler
       Environment:
         Variables: 

@@ -252,7 +252,7 @@ Resources:
       Description: Lambda for status dashboard
       FunctionName: !Sub ${ProjectId}-Dashboard
       Role: !If [PrimaryRegion, !GetAtt DashboardLambdaRole.Arn, !Sub 'arn:aws:iam::${AWS::AccountId}:role/${ProjectId}-DashboardLambdaRole']
-      Runtime: nodejs12.x
+      Runtime: nodejs16.x
       Handler: dashboard-lambda.handler
       Environment:
         Variables: 
@@ -290,7 +290,7 @@ Resources:
     Type: AWS::Lambda::LayerVersion
     Properties:
       CompatibleRuntimes: 
-        - nodejs12.x
+        - nodejs16.x
       Content:
         S3Bucket: !FindInMap [RegionalParameters, !Ref AWS::Region, LambdaCodeS3Bucket]
         S3Key: !FindInMap [StaticParameters, StaticParameters, LambdaLayerS3Key]
@@ -355,7 +355,7 @@ Resources:
       Description: Lambda for scheduled Database failover check
       FunctionName: !Sub ${ProjectId}-DatabaseFailover
       Role: !If [PrimaryRegion, !GetAtt FailoverLambdaRole.Arn, !Sub 'arn:aws:iam::${AWS::AccountId}:role/${ProjectId}-FailoverLambdaRole']
-      Runtime: nodejs12.x
+      Runtime: nodejs16.x
       Handler: failover-lambda.handler
       Timeout: 5
       Layers:

@@ -83,7 +83,6 @@ Resources:
     Description: Global Database Cluster
     Properties:
       Engine: aurora-postgresql
-      EngineVersion: '12.8'
       GlobalClusterIdentifier: !Sub ${ProjectId}-global-cluster
       StorageEncrypted: true
 
@@ -94,14 +93,12 @@ Resources:
     Properties:
       DatabaseName: !If [PrimaryRegion, !Ref DBName, !Ref AWS::NoValue]
       DBClusterIdentifier: !Sub ${ProjectId}-cluster-${AWS::Region}
-      DBClusterParameterGroupName: default.aurora-postgresql12
       DBSubnetGroupName: !Ref DBSubnetGroup
       EnableCloudwatchLogsExports:
         - postgresql
       EnableIAMDatabaseAuthentication: true
       Engine: aurora-postgresql
       EngineMode: global
-      EngineVersion: '12.8'
       GlobalClusterIdentifier: !If [PrimaryRegion, !Ref DBGlobalCluster, !Sub '${ProjectId}-global-cluster'] 
       KmsKeyId: !Ref DBKMSKey
       MasterUsername: !If [PrimaryRegion, !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}', !Ref AWS::NoValue]
